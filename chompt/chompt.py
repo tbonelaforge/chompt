@@ -1,5 +1,7 @@
 import copy
 
+import inspect
+
 import pprint
 
 PP = pprint.PrettyPrinter(indent=4)
@@ -19,8 +21,7 @@ class Chompt(object):
 
     def __deepcopy__(self, memo):
         memo[id(self)] = self
-        copied = Chompt()
-        copied.dynamic_attributes = copy.deepcopy(self.dynamic_attributes)
+        copied = type(self)()
         copied.value = copy.deepcopy(self.value, memo)
         copied.token = copy.deepcopy(self.token, memo)
         copied.storage = copy.deepcopy(self.storage, memo)
@@ -67,6 +68,11 @@ class Chompt(object):
         self.storage.store(key, value)
         return self
 
+    def retrieve(self, *path):
+        json_value = self.storage.retrieve(*path)
+        self.value = json_value
+        return self
+
 
     def debug(self):
         printable_value = {
@@ -103,6 +109,29 @@ class Chompt(object):
         raise AssertionError("Expression given to contains was not JSON")
 
 
+    def contains_array(self, expected_array):
+        if not isinstance(expected_array, list):
+            raise AssertionError("The expected value was not an array")
+        actual_array = self.value
+        if not isinstance(actual_array, list):
+            raise AssertionError("The actual value was not an array")
+        for expected_element_expr in expected_array:
+            expected_element_found = False
+            for actual_element in actual_array:
+                if self.contains(expected_element_expr, [], actual_element):
+                    expected_element_found = True
+                    break
+            if not expected_element_found:
+                raise AssertionError("Could not find element: " + str(expected_element_expr))
+        return self
+
+
+    def length(self, expr):
+        expected = self.storage.resolve(expr)
+        assert len(self.value) == expected, "Expected length of: %s, got length of: %s" % (str(expected), len(self.value))
+        return self
+
+
 class Endpoint(object):
     def __init__(self, client_object, context):
         self.context = context
@@ -126,8 +155,7 @@ class Endpoint(object):
                     expected_status_code = value
                 else:
                     resolved_kwargs[key] = self.context.storage.resolve(value)
-            if 'token' not in resolved_kwargs and self.context.get_token() is not None:
-                resolved_kwargs['token'] = self.context.get_token()
+            self.add_token_if_expected(resolved_kwargs, fn)
             result = fn(*resolved_args, **resolved_kwargs)
             if hasattr(result, 'status_code'):
                 assert result.status_code == expected_status_code, "Expected: %s, got: %s" % (
@@ -137,6 +165,12 @@ class Endpoint(object):
             self.context.value = result
             return self.context
         return wrapped_function
+
+
+    def add_token_if_expected(self, resolved_kwargs, fn):
+        inspection_result = inspect.getargspec(fn)
+        if 'token' in inspection_result.args:
+            resolved_kwargs['token'] = self.context.get_token()
 
 
     def __getattr__(self, item):
