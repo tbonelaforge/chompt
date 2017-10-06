@@ -118,9 +118,12 @@ class Chompt(object):
         for expected_element_expr in expected_array:
             expected_element_found = False
             for actual_element in actual_array:
-                if self.contains(expected_element_expr, [], actual_element):
-                    expected_element_found = True
-                    break
+                try:
+                    self.contains(expected_element_expr, [], actual_element)
+                except Exception:
+                    continue
+                expected_element_found = True
+                break
             if not expected_element_found:
                 raise AssertionError("Could not find element: " + str(expected_element_expr))
         return self
@@ -158,9 +161,15 @@ class Endpoint(object):
             self.add_token_if_expected(resolved_kwargs, fn)
             result = fn(*resolved_args, **resolved_kwargs)
             if hasattr(result, 'status_code'):
-                assert result.status_code == expected_status_code, "Expected: %s, got: %s" % (
+                if result.status_code != expected_status_code:
+                    try:
+                        json_message = result.json()
+                    except Exception:
+                        json_message = "Unavailable"
+                assert result.status_code == expected_status_code, "Expected: %s, got: %s -- result.json(): %s" % (
                     expected_status_code,
-                    result.status_code
+                    result.status_code,
+                    json_message
                 )
             self.context.value = result
             return self.context
