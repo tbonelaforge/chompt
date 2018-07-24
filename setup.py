@@ -28,7 +28,7 @@ setup(
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/tbonelaforbe/chompt',
+    url='https://github.com/tbonelaforge/chompt',
 
     # Author details
     author='Terrance Ford',
